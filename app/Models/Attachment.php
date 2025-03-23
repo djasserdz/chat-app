@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Attachment extends Model
 {
     use SoftDeletes;
-    protected $table = 'attachment';
+    protected $table = 'attachments';
     protected $fillable = [
         'message_id',
         'file_path',

@@ -9,6 +9,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Storage;
 
 class MessageSent implements ShouldBroadcastNow
 {
@@ -48,9 +49,16 @@ class MessageSent implements ShouldBroadcastNow
         return [
             'message' => [
                 'id' => $this->message->id,
-                'message' => $this->message->body,
+                'body' => $this->message->body,
                 'user_id' => $this->message->user_id,
                 'created_at' => $this->message->created_at->toIso8601String(),
+                'attachments' => $this->message->attachments->map(function ($attachment) {
+                    return [
+                        'id' => $attachment->id,
+                        'type' => $attachment->type, // Assuming 'image', 'video', etc.
+                        'file_url' => Storage::url($attachment->file_path), // Adjust as needed
+                    ];
+                }),
                 'user' => $this->message->user ? [
                     'name' => $this->message->user->name
                 ] : null

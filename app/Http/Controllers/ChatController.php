@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\MessageSend;
 use App\Events\MessageSent;
+use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
@@ -107,11 +108,11 @@ class ChatController extends Controller
             $query->where('users.id', $user_id);
         })->findOrFail($conversation_id);
 
-        $messages = Message::where('conversation_id', $conversation_id)->with('user')->orderBy('created_at', 'ASC')->get();
+        $messages = Message::where('conversation_id', $conversation_id)->orderBy('created_at', 'ASC')->get();
 
         return Inertia::render('ChatMessages', [
             'conversation' => $conversation,
-            'messages' => $messages,
+            'messages' => MessageResource::collection($messages)->toArray($request),
         ]);
     }
     public function sendMessage(Request $request, $conversation_id)
@@ -120,6 +121,7 @@ class ChatController extends Controller
             'content' => 'nullable|string',
             'file' => 'nullable|file|max:20480|mimes:jpg,jpeg,png,gif,mp4,mov,avi,mp3,wav,pdf,doc,docx,xls,xlsx',
         ]);
+
 
         $user_id = Auth::id();
 
@@ -164,6 +166,13 @@ class ChatController extends Controller
                 'body' => $request->input('content') ?? null,
                 'type' => $fileType,
             ]);
+
+            if ($filePath) {
+                $message->attachments()->create([
+                    'file_path' => $filePath,
+                    'file_type' => $fileType,
+                ]);
+            }
 
 
             event(new MessageSent($message));
