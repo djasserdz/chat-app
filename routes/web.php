@@ -26,10 +26,12 @@ Route::middleware('auth')->group(function () {
 
 
     Route::get('/chat', [ChatController::class, 'get_conversation'])->name('chats');
-    Route::get('/search', [ChatController::class, 'search_user']);
+    Route::get('/search', [ChatController::class, 'search_user'])->name('chat.search');
     Route::post('/create', [ChatController::class, 'create_conversation'])->name('create.chat');
     Route::get('/chat/{conversation_id}', [ChatController::class, 'getMessages']);
     Route::post('/chat/{conversation_id}/create', [ChatController::class, 'sendMessage']);
+    Route::post('/create-group-chat', [ChatController::class, 'create_group_conversation'])
+        ->name('create.group');
 });
 
 require __DIR__ . '/auth.php';

@@ -1,15 +1,14 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { useForm, usePage } from '@inertiajs/vue3';
 import Echo from 'laravel-echo';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
-  conversation: Object,
+  conversation: Array,
   messages: Array,
 });
 
-console.log(props.messages)
 
 
 const chatMessages = ref([...props.messages]);
@@ -116,6 +115,18 @@ const getAttachmentType = (attachment) => {
   // Default to document
   return 'document';
 };
+
+// New function to get the other user's name
+const getOtherUserName = () => {
+  if (!props.conversation?.users) return 'Chat';
+
+  // Find the user who is not the current logged-in user
+  const otherUser = props.conversation.users.find(
+    user => user.id !== usePage().props.auth.user.id
+  );
+
+  return otherUser?.name || 'Chat';
+};
 </script>
 
 <template>
@@ -125,7 +136,12 @@ const getAttachmentType = (attachment) => {
         <img :src="conversation?.users?.[1]?.profile_picture || '/default-avatar.png'"
              alt="User Avatar" class="w-12 h-12 rounded-full object-cover border border-gray-300" />
         <div>
-          <h1 class="text-lg font-semibold text-gray-900">{{ conversation?.name || 'Chat' }}</h1>
+            <div v-if="conversation.type ==='group'">
+                <h1 class="text-lg font-semibold text-gray-900">{{ conversation.name }}</h1>
+            </div>
+            <div v-else>
+                <h1 class="text-lg font-semibold text-gray-900">{{ getOtherUserName() }}</h1>
+            </div>
           <p class="text-sm text-gray-500">{{ conversation?.users?.length || 0 }} participants</p>
         </div>
       </div>
