@@ -15,6 +15,7 @@ class MessageSent implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+
     public $message;
 
     /**

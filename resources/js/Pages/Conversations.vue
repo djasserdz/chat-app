@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch, onMounted } from "vue";
-import { router } from "@inertiajs/vue3";
+import { ref, watch, onMounted, onUnmounted } from "vue";
+import { router, usePage } from "@inertiajs/vue3";
 import axios from "axios";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
+import Echo from 'laravel-echo';
 
 // Reactive state variables
 const searchUser = ref("");
@@ -15,14 +16,54 @@ const loading = ref({
 });
 const error = ref(null);
 
-const props=defineProps({
-    conversation :Array,
+// Notification state
+const notifications = ref([]);
+
+const props = defineProps({
+  conversation: Array,
 });
 
 // New group-related state
 const selectedGroupUsers = ref([]);
 const groupName = ref("");
 const showGroupModal = ref(false);
+
+// Notification methods
+const formatTime = (timestamp) => {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const removeNotification = (id) => {
+  notifications.value = notifications.value.filter(n => n.id !== id);
+};
+
+const handleNotificationClick = (notification) => {
+  router.visit(`/chat/${notification.conversation_id}`);
+  removeNotification(notification.id);
+};
+
+const user_id=usePage().props.auth.user.id
+
+
+// Subscribe to notifications
+  window.Echo.private(`App.Models.User.${user_id}`)
+    .notification((notification) => {
+      console.log("Notification received:", notification); // Debugging
+
+      notifications.value.push({
+        id: Date.now(),
+        sender: {
+          name: notification.sender_name,
+          profile_picture: notification.sender_profile_picture
+        },
+        message: notification.content,
+        conversation_id: notification.conversation_id,
+        timestamp: new Date()
+      });
+
+      setTimeout(() => removeNotification(notification.id), 5000);
+    });
 
 // Fetch existing conversations
 const fetchConversations = async () => {
@@ -48,7 +89,6 @@ const fetchConversations = async () => {
   }
 };
 
-// Fetch users with improved error handling and debounce
 const fetchUsers = async () => {
   // Clear previous error
   error.value = null;
@@ -109,7 +149,7 @@ const startConversation = async (user) => {
 
 // Function to navigate to an existing conversation
 const goToConversation = (conversationId) => {
-  router.visit(`/chat/${conversationId}`);
+  router.get(`/chat/${conversationId}`);
 };
 
 // New method to toggle user selection for group
@@ -141,11 +181,82 @@ const createGroup = async () => {
 onMounted(() => {
   fetchUsers();
   fetchConversations();
+  if (!window.Echo) {
+    window.Echo = new Echo({
+      broadcaster: 'reverb',
+      key: import.meta.env.VITE_REVERB_APP_KEY,
+      wsHost: import.meta.env.VITE_REVERB_HOST,
+      wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+      wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+      forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+      enabledTransports: ['ws', 'wss'],
+    });
+}});
+
+// Cleanup on component unmount
+onUnmounted(() => {
+  if (window.Echo) {
+    window.Echo.disconnect();
+  }
 });
 </script>
 
 <template>
   <AuthenticatedLayout>
+    <!-- Notification Popup -->
+    <div
+      v-if="notifications.length"
+      class="fixed top-4 right-4 z-50 space-y-2"
+    >
+      <div
+        v-for="notification in notifications"
+        :key="notification.id"
+        class="bg-white shadow-lg rounded-lg border p-4 transition-all duration-300 ease-in-out flex items-start"
+        :class="[
+          'animate-slide-in',
+          'border-blue-200',
+          'bg-blue-50'
+        ]"
+      >
+        <img
+          :src="notification.sender.profile_picture || '/default-avatar.png'"
+          :alt="`${notification.sender.name}'s avatar`"
+          class="w-10 h-10 rounded-full mr-3"
+        />
+
+        <div class="flex-1">
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="font-bold text-sm">
+              {{ notification.sender.name }}
+            </h3>
+            <button
+              @click="removeNotification(notification.id)"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              ✕
+            </button>
+          </div>
+
+          <p class="text-sm text-gray-600 mb-2">
+            {{ notification.message }}
+          </p>
+
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-gray-400">
+              {{ formatTime(notification.timestamp) }}
+            </span>
+
+            <button
+              @click="handleNotificationClick(notification)"
+              class="text-sm text-blue-600 hover:text-blue-800 font-semibold"
+            >
+              View
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="max-w-4xl mx-auto p-6 space-y-6">
       <!-- Header with Group Creation Button -->
       <div class="flex justify-between items-center mb-6">
@@ -359,5 +470,20 @@ onMounted(() => {
 <style scoped>
 .transition {
   transition: background-color 0.2s ease;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
 }
 </style>

@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\MessageSend;
 use App\Events\MessageSent;
 use App\Http\Resources\MessageResource;
 use App\Http\Resources\UserResource;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Notifications\MessageReceived;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Inertia\Inertia;
 
@@ -187,9 +188,9 @@ class ChatController extends Controller
             'file' => 'nullable|file|max:20480|mimes:jpg,jpeg,png,gif,mp4,mov,avi,mp3,wav,pdf,doc,docx,xls,xlsx',
         ]);
 
-
         $user_id = Auth::id();
-
+        $user_sender = User::find($user_id);
+        $conversation = Conversation::find($conversation_id);
 
         $isParticipant = Conversation::where('id', $conversation_id)
             ->whereHas('users', fn($query) => $query->where('users.id', $user_id))
@@ -205,11 +206,9 @@ class ChatController extends Controller
             $filePath = null;
             $fileType = 'text';
 
-
             if ($request->hasFile('file')) {
                 $file = $request->file('file');
                 $extension = $file->getClientOriginalExtension();
-
 
                 if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif'])) {
                     $fileType = 'image';
@@ -221,10 +220,9 @@ class ChatController extends Controller
                     $fileType = 'document';
                 }
 
-
                 $filePath = $file->store("messages/{$fileType}s", 'public');
             }
-            // Store the message
+
             $message = Message::create([
                 'user_id' => $user_id,
                 'conversation_id' => $conversation_id,
@@ -242,12 +240,25 @@ class ChatController extends Controller
 
             event(new MessageSent($message));
 
+            if ($conversation->type === 'private') {
+                $otherUser = $conversation->users()->where('users.id', '!=', $user_id)->first();
+                if ($otherUser) {
+                    $otherUser->notify(new MessageReceived($message, $user_sender));
+                }
+            } else if ($conversation->type === 'group') {
+                $groupUsers = $conversation->users()->where('users.id', '!=', $user_id)->get();
+                Notification::send($groupUsers, new MessageReceived($message, $user_sender));
+            }
+
             DB::commit();
+            //return response()->json(['success' => 'Message sent successfully.']);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Failed to send message.'], 500);
+            //return response()->json(['error' => 'Failed to send message.'], 500);
         }
     }
+
+
 
 
     public function create_group_conversation(Request $request)
